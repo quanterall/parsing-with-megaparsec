@@ -4,3 +4,6 @@ packages:
 - .
 
 allow-different-user: true
+
+nix:
+  enable: true

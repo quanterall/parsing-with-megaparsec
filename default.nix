@@ -25,6 +25,4 @@ in pkgs.haskell-nix.project {
     name = "parsing-with-megaparsec";
     src = ./.;
   };
-  # Specify the GHC version to use.
-  compiler-nix-name = "ghc8107"; # Not required for `stack.yaml` based projects.
 }
