@@ -9,5 +9,4 @@ cabal.sandbox.config
 *.swp
 *~
 \#*
-parsing-with-megaparsec.cabal
 .devcontainer/build
