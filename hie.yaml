@@ -3,11 +3,11 @@ cradle:
     - path: "./src"
       component: "parsing-with-megaparsec:lib"
 
+    - path: "./test"
+      component: "parsing-with-megaparsec:test:parsing-with-megaparsec-test"
+
     - path: "./app/Main.hs"
       component: "parsing-with-megaparsec:exe:parsing-with-megaparsec"
 
     - path: "./app/Paths_parsing_with_megaparsec.hs"
       component: "parsing-with-megaparsec:exe:parsing-with-megaparsec"
-
-    - path: "./test"
-      component: "parsing-with-megaparsec:test:parsing-with-megaparsec-test"

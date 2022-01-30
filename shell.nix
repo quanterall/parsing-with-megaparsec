@@ -9,4 +9,6 @@ in (import ./default.nix).shellFor {
     haskell-language-server = "latest";
     ormolu = "0.3.1.0";
   };
+
+  exactDeps = true;
 }
