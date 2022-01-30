@@ -1,6 +1,9 @@
 name:    parsing-with-megaparsec
 version: "0.0.0"
 
+extra-source-files:
+- test-data/*
+
 dependencies:
 
 - base >=4.9.1.0 && <5
