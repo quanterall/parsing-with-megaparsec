@@ -128,6 +128,42 @@ spec = do
                   (ShellCommand [ShellCommandLiteral "echo test"] Nothing)
             ]
 
+      it "should be able to assign a basic shell command result and access stdout" $ do
+        let text = "value = 'echo test'.out"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $
+                AssignValue
+                  (BindingName "value")
+                  (ShellCommand [ShellCommandLiteral "echo test"] (Just ShellStandardOut))
+            ]
+
+      it "should be able to assign a basic shell command result and access stderr" $ do
+        let text = "value = 'echo test'.err"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $
+                AssignValue
+                  (BindingName "value")
+                  (ShellCommand [ShellCommandLiteral "echo test"] (Just ShellStandardError))
+            ]
+
+      it "should be able to assign a basic shell command result and access exit code" $ do
+        let text = "value = 'echo test'.code"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $
+                AssignValue
+                  (BindingName "value")
+                  (ShellCommand [ShellCommandLiteral "echo test"] (Just ShellExitCode))
+            ]
+
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()
 expectRight (Left e) = expectationFailure $ errorBundlePretty e
