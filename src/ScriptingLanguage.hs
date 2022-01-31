@@ -199,7 +199,7 @@ shellCommandP = do
       (Text.pack >>> ShellCommandLiteral) <$> Megaparsec.some shellLiteralCharacterP
 
     shellLiteralCharacterP :: Parser Char
-    shellLiteralCharacterP = Megaparsec.satisfy (/= '\'')
+    shellLiteralCharacterP = Megaparsec.satisfy (`notElem` ['\'', '`'])
 
 -- | Defines how whitespace is consumed.
 spaceConsumer :: Parser ()

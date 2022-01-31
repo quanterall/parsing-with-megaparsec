@@ -164,6 +164,27 @@ spec = do
                   (ShellCommand [ShellCommandLiteral "echo test"] (Just ShellExitCode))
             ]
 
+      it "should be able to assign a shell command with text and string interpolation" $ do
+        let text = "test = \"hello\"\nvalue = 'echo `test {test}`'"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $ AssignValue (BindingName "test") (StringLiteral "hello"),
+              Statement $
+                AssignValue
+                  (BindingName "value")
+                  ( ShellCommand
+                      [ ShellCommandLiteral "echo ",
+                        ShellCommandInterpolation
+                          [ LiteralFragment "test ",
+                            BindingFragment (BindingName "test")
+                          ]
+                      ]
+                      Nothing
+                  )
+            ]
+
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()
 expectRight (Left e) = expectationFailure $ errorBundlePretty e
