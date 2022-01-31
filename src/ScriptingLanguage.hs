@@ -34,7 +34,12 @@ data Expression
   | FloatLiteral !Double
   | BooleanLiteral !Bool
   | InterpolatedString ![StringInterpolationFragment]
-  | ShellCommand !Text !(Maybe ShellCommandComponent)
+  | ShellCommand ![ShellCommandText] !(Maybe ShellCommandComponent)
+  deriving (Eq, Show)
+
+data ShellCommandText
+  = ShellCommandLiteral !Text
+  | ShellCommandInterpolation ![StringInterpolationFragment]
   deriving (Eq, Show)
 
 data StringInterpolationFragment
@@ -115,9 +120,13 @@ stringLiteralP = do
 
 interpolatedStringP :: Parser Expression
 interpolatedStringP = do
-  _ <- MChar.char '`'
-  fragments <- Megaparsec.manyTill interpolationFragmentP (MChar.char '`')
+  fragments <- stringInterpolationFragmentsP
   pure $ InterpolatedString fragments
+
+stringInterpolationFragmentsP :: Parser [StringInterpolationFragment]
+stringInterpolationFragmentsP = do
+  _ <- MChar.char '`'
+  Megaparsec.manyTill interpolationFragmentP (MChar.char '`')
 
 interpolationFragmentP :: Parser StringInterpolationFragment
 interpolationFragmentP =
@@ -162,18 +171,10 @@ booleanLiteralP = do
 shellCommandP :: Parser Expression
 shellCommandP = do
   _ <- MChar.char '\''
-  command <-
-    Text.pack
-      <$> Megaparsec.manyTill
-        (Megaparsec.try readEscapedSingleQuote <|> MChar.printChar)
-        (MChar.char '\'')
+  shellCommandText <- shellCommandTextP
   maybeShellCommandComponent <- Megaparsec.optional shellCommandComponentP
-  pure $ ShellCommand command maybeShellCommandComponent
+  pure $ ShellCommand shellCommandText maybeShellCommandComponent
   where
-    readEscapedSingleQuote :: Parser Char
-    readEscapedSingleQuote = do
-      MChar.char '\\' *> MChar.char '\''
-
     shellCommandComponentP :: Parser ShellCommandComponent
     shellCommandComponentP = do
       _ <- MChar.char '.'
@@ -182,6 +183,23 @@ shellCommandP = do
           MChar.string "err" *> pure ShellStandardError,
           MChar.string "code" *> pure ShellExitCode
         ]
+
+    shellCommandTextP :: Parser [ShellCommandText]
+    shellCommandTextP =
+      Megaparsec.manyTill
+        ( Megaparsec.choice
+            [ ShellCommandInterpolation <$> stringInterpolationFragmentsP,
+              shellCommandLiteralP
+            ]
+        )
+        (MChar.char '\'')
+
+    shellCommandLiteralP :: Parser ShellCommandText
+    shellCommandLiteralP =
+      (Text.pack >>> ShellCommandLiteral) <$> Megaparsec.some shellLiteralCharacterP
+
+    shellLiteralCharacterP :: Parser Char
+    shellLiteralCharacterP = Megaparsec.satisfy (/= '\'')
 
 -- | Defines how whitespace is consumed.
 spaceConsumer :: Parser ()

@@ -115,6 +115,19 @@ spec = do
                   )
             ]
 
+    describe "Shell commands" $ do
+      it "should be able to assign a basic shell command result without any special fields" $ do
+        let text = "value = 'echo test'"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $
+                AssignValue
+                  (BindingName "value")
+                  (ShellCommand [ShellCommandLiteral "echo test"] Nothing)
+            ]
+
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()
 expectRight (Left e) = expectationFailure $ errorBundlePretty e
