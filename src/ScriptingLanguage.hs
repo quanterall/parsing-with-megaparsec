@@ -107,7 +107,7 @@ ifStatementP = do
   _ <- symbol "else"
   _ <- symbol "{"
   elseBranch <- lexeme scriptComponentsP
-  _ <- symbol "}"
+  _ <- MChar.char '}'
   pure $ IfStatement condition thenBranch elseBranch
 
 expressionP :: Parser Expression

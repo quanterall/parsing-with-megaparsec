@@ -23,7 +23,7 @@ if result {
     outputString = "Failure!"
 }
 
-'echo `${outputString}'
+'echo `{outputString}`'
 
 // We can use string interpolation with backticks and curly braces
 'echo `Output: {output} | Error: {error} | Exit code: {exitCode}`'

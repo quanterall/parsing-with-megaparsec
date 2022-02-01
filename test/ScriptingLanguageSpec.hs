@@ -254,7 +254,52 @@ spec = do
         textContent <- readFileUtf8 testFile
         result <- parseScript (Filename testFile) textContent
         expectRight result
-        length <$> result `shouldBe` Right 6
+        length <$> result `shouldBe` Right 8
+        result
+          `shouldBe` Right
+            [ Statement $ AssignValue (BindingName "user") (StringLiteral "pesho"),
+              Statement $
+                AssignValue
+                  (BindingName "result")
+                  (ShellCommand [ShellCommandLiteral "ls -l"] Nothing),
+              Statement $
+                AssignValue
+                  (BindingName "output")
+                  (ShellCommand [ShellCommandLiteral "ls -l"] (Just ShellStandardOut)),
+              Statement $
+                AssignValue
+                  (BindingName "error")
+                  (ShellCommand [ShellCommandLiteral "ls -l"] (Just ShellStandardError)),
+              Statement $
+                AssignValue
+                  (BindingName "exitCode")
+                  (ShellCommand [ShellCommandLiteral "ls -l"] (Just ShellExitCode)),
+              Statement $
+                IfStatement
+                  (BindingExpression $ BindingName "result")
+                  [Statement $ AssignValue (BindingName "outputString") (StringLiteral "Success!")]
+                  [Statement $ AssignValue (BindingName "outputString") (StringLiteral "Failure!")],
+              Expression $
+                ShellCommand
+                  [ ShellCommandLiteral "echo ",
+                    ShellCommandInterpolation [BindingFragment (BindingName "outputString")]
+                  ]
+                  Nothing,
+              Expression $
+                ( ShellCommand
+                    [ ShellCommandLiteral "echo ",
+                      ShellCommandInterpolation
+                        [ LiteralFragment "Output: ",
+                          BindingFragment (BindingName "output"),
+                          LiteralFragment " | Error: ",
+                          BindingFragment (BindingName "error"),
+                          LiteralFragment " | Exit code: ",
+                          BindingFragment (BindingName "exitCode")
+                        ]
+                    ]
+                    Nothing
+                )
+            ]
 
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()
