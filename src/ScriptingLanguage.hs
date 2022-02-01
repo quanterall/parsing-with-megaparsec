@@ -35,6 +35,7 @@ data Expression
   | BooleanLiteral !Bool
   | InterpolatedString ![StringInterpolationFragment]
   | ShellCommand ![ShellCommandText] !(Maybe ShellCommandComponent)
+  | BindingEvaluation !BindingName
   deriving (Eq, Show)
 
 data ShellCommandText
@@ -62,17 +63,17 @@ parseScript (Filename filename) text = do
   let initialState = ParsingState {bindingsRef = bindingsRef'}
   -- `runParserT` here is going to return a `RIO ParsingState (Either ...)` so we take that and
   -- give it to `runRIO` which will unpack that into an `IO (Either ...)`
-  runRIO initialState $ Megaparsec.runParserT scriptP filename text
+  runRIO initialState $ Megaparsec.runParserT scriptComponentsP filename text
 
-scriptP :: Parser [ScriptComponent]
-scriptP =
+scriptComponentsP :: Parser [ScriptComponent]
+scriptComponentsP =
   Megaparsec.sepBy
     (Megaparsec.choice [Statement <$> statementP, Expression <$> expressionP])
     (some MChar.newline)
 
 statementP :: Parser Statement
 statementP = do
-  Megaparsec.choice [assignValueP, ifStatementP]
+  Megaparsec.choice [Megaparsec.try assignValueP, ifStatementP]
 
 assignValueP :: Parser Statement
 assignValueP = do
@@ -94,7 +95,17 @@ bindingNameP = do
   pure $ BindingName $ Text.pack (initialCharacter : restOfName)
 
 ifStatementP :: Parser Statement
-ifStatementP = undefined
+ifStatementP = do
+  _ <- symbol "if "
+  condition <- lexeme expressionP
+  _ <- symbol "{"
+  thenBranch <- lexeme scriptComponentsP
+  _ <- symbol "}"
+  _ <- symbol "else"
+  _ <- symbol "{"
+  elseBranch <- lexeme scriptComponentsP
+  _ <- symbol "}"
+  pure $ IfStatement condition thenBranch elseBranch
 
 expressionP :: Parser Expression
 expressionP =

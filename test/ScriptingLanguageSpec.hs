@@ -185,6 +185,20 @@ spec = do
                   )
             ]
 
+    describe "if statements" $ do
+      it "should be able to parse a basic if statement with a boolean literal" $ do
+        let text = "if true { value = \"test\" } else {}"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $
+                IfStatement
+                  (BooleanLiteral True)
+                  [Statement $ AssignValue (BindingName "value") (StringLiteral "test")]
+                  []
+            ]
+
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()
 expectRight (Left e) = expectationFailure $ errorBundlePretty e
