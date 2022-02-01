@@ -216,6 +216,12 @@ spec = do
                   [Statement $ AssignValue (BindingName "value") (StringLiteral "test2")]
             ]
 
+    describe "full test" $ do
+      it "should be able to parse test file" $ do
+        textContent <- readFileUtf8 testFile
+        result <- parseScript (Filename "test.glue") textContent
+        expectRight result
+
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()
 expectRight (Left e) = expectationFailure $ errorBundlePretty e
