@@ -184,6 +184,39 @@ spec = do
                       Nothing
                   )
             ]
+      it "should be able to interpolate several bound variables in a shell command" $ do
+        let text = "output = \"hello\"\nerror = \"there\"\nexitCode = 0\n'echo `Output: {output} | Error: {error} | Exit code: {exitCode}`'"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $
+                AssignValue
+                  (BindingName "output")
+                  (StringLiteral "hello"),
+              Statement $
+                AssignValue
+                  (BindingName "error")
+                  (StringLiteral "there"),
+              Statement $
+                AssignValue
+                  (BindingName "exitCode")
+                  (IntegerLiteral 0),
+              Expression $
+                ( ShellCommand
+                    [ ShellCommandLiteral "echo ",
+                      ShellCommandInterpolation
+                        [ LiteralFragment "Output: ",
+                          BindingFragment (BindingName "output"),
+                          LiteralFragment " | Error: ",
+                          BindingFragment (BindingName "error"),
+                          LiteralFragment " | Exit code: ",
+                          BindingFragment (BindingName "exitCode")
+                        ]
+                    ]
+                    Nothing
+                )
+            ]
 
     describe "if statements" $ do
       it "should be able to parse a basic if statement with a boolean literal" $ do
