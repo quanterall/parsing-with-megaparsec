@@ -35,7 +35,7 @@ data Expression
   | BooleanLiteral !Bool
   | InterpolatedString ![StringInterpolationFragment]
   | ShellCommand ![ShellCommandText] !(Maybe ShellCommandComponent)
-  | BindingEvaluation !BindingName
+  | BindingExpression !BindingName
   deriving (Eq, Show)
 
 data ShellCommandText
@@ -115,8 +115,18 @@ expressionP =
       floatLiteralP,
       booleanLiteralP,
       interpolatedStringP,
-      shellCommandP
+      shellCommandP,
+      BindingExpression <$> availableBindingP
     ]
+
+availableBindingP :: Parser BindingName
+availableBindingP = do
+  bindingName <- bindingNameP
+  ref <- asks bindingsRef
+  bindingExists <- liftIO $ Map.member bindingName <$> readIORef ref
+  if bindingExists
+    then pure bindingName
+    else reportError $ "Binding " <> Text.unpack (unBindingName bindingName) <> " is not defined"
 
 stringLiteralP :: Parser Expression
 stringLiteralP = do

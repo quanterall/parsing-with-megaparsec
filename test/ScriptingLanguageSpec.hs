@@ -199,6 +199,23 @@ spec = do
                   []
             ]
 
+      it "should be able to parse a basic if statement with a binding expression" $ do
+        let text = "test = 'echo test'\nif test { value = \"test\" } else { value = \"test2\" }"
+        result <- parseScript (Filename "test.glue") text
+        expectRight result
+        result
+          `shouldBe` Right
+            [ Statement $
+                AssignValue
+                  (BindingName "test")
+                  (ShellCommand [ShellCommandLiteral "echo test"] Nothing),
+              Statement $
+                IfStatement
+                  (BindingExpression (BindingName "test"))
+                  [Statement $ AssignValue (BindingName "value") (StringLiteral "test")]
+                  [Statement $ AssignValue (BindingName "value") (StringLiteral "test2")]
+            ]
+
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()
 expectRight (Left e) = expectationFailure $ errorBundlePretty e
