@@ -18,10 +18,12 @@ exitCode = 'ls -l'.code
 
 // We can use an `if` to conditionally execute code
 if result {
-  'echo Success!'
+    outputString = "Success!"
 } else {
-  'echo Failure!'
+    outputString = "Failure!"
 }
+
+'echo `${outputString}'
 
 // We can use string interpolation with backticks and curly braces
 'echo `Output: {output} | Error: {error} | Exit code: {exitCode}`'

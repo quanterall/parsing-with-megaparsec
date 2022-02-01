@@ -219,8 +219,9 @@ spec = do
     describe "full test" $ do
       it "should be able to parse test file" $ do
         textContent <- readFileUtf8 testFile
-        result <- parseScript (Filename "test.glue") textContent
+        result <- parseScript (Filename testFile) textContent
         expectRight result
+        length <$> result `shouldBe` Right 6
 
 expectRight :: Either (ParseErrorBundle Text Void) a -> Expectation
 expectRight (Right _) = return ()

@@ -67,9 +67,12 @@ parseScript (Filename filename) text = do
 
 scriptComponentsP :: Parser [ScriptComponent]
 scriptComponentsP =
-  Megaparsec.sepBy
-    (Megaparsec.choice [Statement <$> statementP, Expression <$> expressionP])
+  Megaparsec.sepEndBy
+    (maybeWhiteSpaceAnd $ Megaparsec.choice [Statement <$> statementP, Expression <$> expressionP])
     (some MChar.newline)
+  where
+    maybeWhiteSpaceAnd :: Parser a -> Parser a
+    maybeWhiteSpaceAnd p = optional spaceConsumer *> p
 
 statementP :: Parser Statement
 statementP = do
@@ -224,7 +227,7 @@ shellCommandP = do
 
 -- | Defines how whitespace is consumed.
 spaceConsumer :: Parser ()
-spaceConsumer = Lexer.space MChar.space1 (Lexer.skipLineComment "// ") Megaparsec.empty
+spaceConsumer = Lexer.space MChar.space1 (Lexer.skipLineComment "//") Megaparsec.empty
 
 -- | Applies a parser and any amount of whitespace after.
 lexeme :: Parser a -> Parser a
