@@ -76,7 +76,7 @@ scriptComponentsP =
 
 statementP :: Parser Statement
 statementP = do
-  Megaparsec.choice [Megaparsec.try assignValueP, ifStatementP]
+  Megaparsec.choice [ifStatementP, assignValueP]
 
 assignValueP :: Parser Statement
 assignValueP = do
