@@ -28,14 +28,26 @@ data Statement
   | IfStatement !Expression ![ScriptComponent] ![ScriptComponent]
   deriving (Eq, Show)
 
+-- | An expression is a piece of code that can be evaluated and has a return value after evaluation.
 data Expression
-  = StringLiteral !Text
-  | IntegerLiteral !Integer
-  | FloatLiteral !Double
-  | BooleanLiteral !Bool
-  | InterpolatedString ![StringInterpolationFragment]
-  | ShellCommand ![ShellCommandText] !(Maybe ShellCommandComponent)
-  | BindingExpression !BindingName
+  = -- | "A string"
+    StringLiteral !Text
+  | -- | 42
+    IntegerLiteral !Integer
+  | -- | 1337.0
+    FloatLiteral !Double
+  | -- | true / false
+    BooleanLiteral !Bool
+  | -- | `A string with a {binding}`
+    InterpolatedString ![StringInterpolationFragment]
+  | -- | 'ls -l `{inputDirectory}`'
+    -- 'ls -l `{inputDirectory}`'.out
+    -- 'ls -l `{inputDirectory}`'.err
+    -- 'ls -l `{inputDirectory}`'.code
+    ShellCommand ![ShellCommandText] !(Maybe ShellCommandComponent)
+  | -- | (When a binding with the name `binding` exists)
+    -- binding
+    BindingExpression !BindingName
   deriving (Eq, Show)
 
 data ShellCommandText
@@ -80,6 +92,8 @@ statementP = do
 
 assignValueP :: Parser Statement
 assignValueP = do
+  -- If we can read a binding name followed by an equals sign and an expressions we want to add it
+  -- to the bindings map.
   bindingName <- lexeme bindingNameP
   _ <- symbol "="
   expression <- expressionP
@@ -88,12 +102,16 @@ assignValueP = do
 
 bindValue :: BindingName -> Expression -> Parser ()
 bindValue bindingName expression = do
+  -- We read our bindings reference (a map of binding names to expressions)
   ref <- asks bindingsRef
+  -- We then modify it by inserting our expression in the corresponding slot
   modifyIORef ref $ Map.insert bindingName expression
 
 bindingNameP :: Parser BindingName
 bindingNameP = do
+  -- A binding name starts with a letter
   initialCharacter <- MChar.letterChar
+  -- ... the rest of the characters can be any alphanumeric character or underscore
   restOfName <- Megaparsec.many (MChar.alphaNumChar <|> MChar.char '_')
   pure $ BindingName $ Text.pack (initialCharacter : restOfName)
 
@@ -133,13 +151,22 @@ availableBindingP = do
 
 stringLiteralP :: Parser Expression
 stringLiteralP = do
+  -- A string starts with a double quote
   _ <- MChar.char '\"'
+  -- The contents of it will be many printable characters, but we can also have escaped quotes,
+  -- which we need to handle. The `try` function here will try to apply a parser, but if it fails
+  -- will not end up consuming any input. This makes it so that we can say "Try to parse this but
+  -- put the content back if you end up failing".
+  -- When this first part fails, we'll move on tho `MChar.printChar` because we use `<|>`, the
+  -- alternative operator.
+  -- The string stops when we find a normal double quote.
   string <-
     Megaparsec.manyTill (Megaparsec.try readEscapedQuote <|> MChar.printChar) (MChar.char '\"')
   pure $ StringLiteral $ Text.pack string
   where
     readEscapedQuote :: Parser Char
     readEscapedQuote = do
+      -- An escaped double quote is a backslash followed by a double quote
       MChar.char '\\' *> MChar.char '\"'
 
 interpolatedStringP :: Parser Expression
