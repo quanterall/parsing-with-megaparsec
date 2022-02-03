@@ -36,7 +36,7 @@ data Expression
     IntegerLiteral !Integer
   | -- | 1337.0
     FloatLiteral !Double
-  | -- | true / false
+  | -- | True / False
     BooleanLiteral !Bool
   | -- | `A string with a {binding}`
     InterpolatedString ![StringInterpolationFragment]
@@ -109,14 +109,28 @@ bindValue bindingName expression = do
 
 bindingNameP :: Parser BindingName
 bindingNameP = do
-  -- A binding name starts with a letter
-  initialCharacter <- MChar.letterChar
+  -- A binding name starts with a lowercase letter
+  initialCharacter <- MChar.lowerChar
   -- ... the rest of the characters can be any alphanumeric character or underscore
   restOfName <- Megaparsec.many (MChar.alphaNumChar <|> MChar.char '_')
   pure $ BindingName $ Text.pack (initialCharacter : restOfName)
 
+availableBindingP :: Parser BindingName
+availableBindingP = do
+  -- An available binding is one where we can read a binding name and look it up in our bindings to
+  -- verify that it is available.
+  bindingName <- bindingNameP
+  ref <- asks bindingsRef
+  bindingExists <- liftIO $ Map.member bindingName <$> readIORef ref
+  if bindingExists
+    then pure bindingName
+    else reportError $ "Binding " <> Text.unpack (unBindingName bindingName) <> " is not defined"
+
 ifStatementP :: Parser Statement
 ifStatementP = do
+  -- An `if` statement starts with the literal symbol "if", then an expression to evalue for
+  -- truthiness, then a list of statements to execute if the expression is true, and then the symbol
+  -- "else" and a list of statements to execute if the expression is false.
   _ <- symbol "if "
   condition <- lexeme expressionP
   _ <- symbol "{"
@@ -131,23 +145,27 @@ ifStatementP = do
 expressionP :: Parser Expression
 expressionP =
   Megaparsec.choice
-    [ stringLiteralP,
-      integerLiteralP,
-      floatLiteralP,
-      booleanLiteralP,
+    [ -- The three different string openers are very distinct and can be matched very easily with an
+      -- opening character (double quote, single quote or backtick), so we can put them first
+      -- without worrying that anything else contends for the same opening input. This allows the
+      -- parser to try to read the initial part, fail and move on to other alternatives with no
+      -- consumed input.
+      -- "..."
+      stringLiteralP,
+      -- `...`
       interpolatedStringP,
+      -- '...'
       shellCommandP,
-      BindingExpression <$> availableBindingP
+      booleanLiteralP,
+      Megaparsec.try (BindingExpression <$> availableBindingP),
+      -- The reason we want to use `floatLiteralP` here before `integerLiteralP` is that they start
+      -- with the same thing; a (potentially) signed number. Float then requires more (a period).
+      -- If we successfully read the number part, we don't want to fail because we failed to read
+      -- the period, so we put the input back in the stream with `try`, allowing `integerLiteralP`
+      -- to succeed.
+      Megaparsec.try floatLiteralP,
+      integerLiteralP
     ]
-
-availableBindingP :: Parser BindingName
-availableBindingP = do
-  bindingName <- bindingNameP
-  ref <- asks bindingsRef
-  bindingExists <- liftIO $ Map.member bindingName <$> readIORef ref
-  if bindingExists
-    then pure bindingName
-    else reportError $ "Binding " <> Text.unpack (unBindingName bindingName) <> " is not defined"
 
 stringLiteralP :: Parser Expression
 stringLiteralP = do
@@ -170,57 +188,61 @@ stringLiteralP = do
       MChar.char '\\' *> MChar.char '\"'
 
 interpolatedStringP :: Parser Expression
-interpolatedStringP = do
-  fragments <- stringInterpolationFragmentsP
-  pure $ InterpolatedString fragments
+interpolatedStringP = InterpolatedString <$> stringInterpolationFragmentsP
 
 stringInterpolationFragmentsP :: Parser [StringInterpolationFragment]
 stringInterpolationFragmentsP = do
-  _ <- MChar.char '`'
-  Megaparsec.manyTill interpolationFragmentP (MChar.char '`')
+  -- An interpolated string starts with a backtick and we read interpolation fragments until another
+  -- backtick is read.
+  MChar.char '`' *> Megaparsec.manyTill interpolationFragmentP (MChar.char '`')
 
 interpolationFragmentP :: Parser StringInterpolationFragment
 interpolationFragmentP =
+  -- An interpolation fragment is either a binding fragment or a literal fragment. If reading a
+  -- binding fragment fails, we'll put whatever we read back in the input stream and read it as a
+  -- literal.
   Megaparsec.choice [Megaparsec.try bindingFragmentP, literalFragmentP]
 
 bindingFragmentP :: Parser StringInterpolationFragment
 bindingFragmentP = do
+  -- A binding fragment is a curly brace followed by an available binding name, then a closing curly
+  -- brace.
   _ <- MChar.char '{'
-  bindingName <- bindingNameP
+  bindingName <- availableBindingP
   _ <- MChar.char '}'
-  checkBoundVariable bindingName
   pure $ BindingFragment bindingName
 
-checkBoundVariable :: BindingName -> Parser ()
-checkBoundVariable bindingName = do
-  reference <- asks bindingsRef
-  bindings <- readIORef reference
-  case Map.lookup bindingName bindings of
-    Nothing -> reportError $ "Variable " <> show bindingName <> " is unbound"
-    Just _ -> pure ()
-
-reportError :: String -> Parser a
-reportError = Megaparsec.ErrorFail >>> Set.singleton >>> Megaparsec.fancyFailure
-
 literalFragmentP :: Parser StringInterpolationFragment
-literalFragmentP = (Text.pack >>> LiteralFragment) <$> Megaparsec.some literalFragmentCharacterP
+literalFragmentP =
+  -- A literal fragment is just all characters that aren't backticks or opening curly braces.
+  (Text.pack >>> LiteralFragment) <$> Megaparsec.some literalFragmentCharacterP
   where
     literalFragmentCharacterP :: Parser Char
     literalFragmentCharacterP = Megaparsec.satisfy (`notElem` ['`', '{'])
 
 integerLiteralP :: Parser Expression
-integerLiteralP = IntegerLiteral <$> Lexer.signed (pure ()) Lexer.decimal
+integerLiteralP =
+  -- We use `signed` here to say that we want the capability to read both negative and positive
+  -- integer literals. The `pure ()` is how to read space between the sign and the number. Here we
+  -- are saying that we don't want to consume any space.
+  IntegerLiteral <$> Lexer.signed (pure ()) Lexer.decimal
 
 floatLiteralP :: Parser Expression
 floatLiteralP = FloatLiteral <$> Lexer.signed (pure ()) Lexer.float
 
 booleanLiteralP :: Parser Expression
 booleanLiteralP = do
-  text <- ["true", "false"] & fmap MChar.string & Megaparsec.choice
-  pure $ BooleanLiteral $ text == "true"
+  -- A boolean literal is either `True` or `False`. We read it by saying that there are two strings
+  -- you are allowed to match, then we create the boolean by comparing the result to the literal
+  -- string "True".
+  text <- ["True", "False"] & fmap MChar.string & Megaparsec.choice
+  pure $ BooleanLiteral $ text == "True"
 
 shellCommandP :: Parser Expression
 shellCommandP = do
+  -- A shell command starts with a single quote followed by a special string that can either be
+  -- shell command text or interpolated string text. It can then be followed by an accessor to say
+  -- which part of the result we want to access.
   _ <- MChar.char '\''
   shellCommandText <- shellCommandTextP
   maybeShellCommandComponent <- Megaparsec.optional shellCommandComponentP
@@ -228,6 +250,8 @@ shellCommandP = do
   where
     shellCommandComponentP :: Parser ShellCommandComponent
     shellCommandComponentP = do
+      -- A shell command component is an accessor for the result of a shell command. We might want
+      -- to access standard out, standard error or the exit code.
       _ <- MChar.char '.'
       Megaparsec.choice
         [ MChar.string "out" *> pure ShellStandardOut,
@@ -237,6 +261,8 @@ shellCommandP = do
 
     shellCommandTextP :: Parser [ShellCommandText]
     shellCommandTextP =
+      -- Shell command text is comprised of either string interpolation fragments or shell command
+      -- literal text. This continues until we read a single quote.
       Megaparsec.manyTill
         ( Megaparsec.choice
             [ ShellCommandInterpolation <$> stringInterpolationFragmentsP,
@@ -247,6 +273,7 @@ shellCommandP = do
 
     shellCommandLiteralP :: Parser ShellCommandText
     shellCommandLiteralP =
+      -- A shell command literal is just any character that is not a backtick or single quote.
       (Text.pack >>> ShellCommandLiteral) <$> Megaparsec.some shellLiteralCharacterP
 
     shellLiteralCharacterP :: Parser Char
@@ -263,3 +290,7 @@ lexeme = Lexer.lexeme spaceConsumer
 -- | Reads a specific string of text and any amount of whitespace after.
 symbol :: Text -> Parser Text
 symbol = Lexer.symbol spaceConsumer
+
+-- | Returns an error to be displayed.
+reportError :: String -> Parser a
+reportError = Megaparsec.ErrorFail >>> Set.singleton >>> Megaparsec.fancyFailure
