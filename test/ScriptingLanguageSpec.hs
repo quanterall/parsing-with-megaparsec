@@ -12,7 +12,7 @@ testFile = "test-data/test.glue"
 spec :: Spec
 spec = do
   describe "Parsing" $ do
-    describe "Basic string assignment" $ do
+    describe "Basic assignment" $ do
       it "should create an instruction to store a string into a binding" $ do
         let text = "value = \"test\""
         result <- parseScript (Filename "test.glue") text
@@ -37,6 +37,74 @@ spec = do
             [ Statement $ AssignValue (BindingName "value1") (StringLiteral "test1"),
               Statement $ AssignValue (BindingName "value2") (StringLiteral "test2")
             ]
+
+      it "should be able to assign a integer" $ do
+        let text = "value = 1"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [Statement $ AssignValue (BindingName "value") (IntegerLiteral 1)]
+
+      it "should be able to assign a negative integer" $ do
+        let text = "value = -1"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [Statement $ AssignValue (BindingName "value") (IntegerLiteral (-1))]
+
+      it "should be able to assign a float" $ do
+        let text = "value = 1.1"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [Statement $ AssignValue (BindingName "value") (FloatLiteral 1.1)]
+
+      it "should be able to assign a negative float" $ do
+        let text = "value = -1.1"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [Statement $ AssignValue (BindingName "value") (FloatLiteral (-1.1))]
+
+      it "should be able to assign a `True`" $ do
+        let text = "value = True"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [Statement $ AssignValue (BindingName "value") (BooleanLiteral True)]
+
+      it "should be able to assign a `False`" $ do
+        let text = "value = False"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [Statement $ AssignValue (BindingName "value") (BooleanLiteral False)]
+
+      it "should be able to assign another binding" $ do
+        let text = "value2 = \"hello\"\nvalue = value2"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [ Statement $ AssignValue (BindingName "value2") (StringLiteral "hello"),
+              Statement $ AssignValue (BindingName "value") (BindingExpression $ BindingName "value2")
+            ]
+
+      it "should be able to assign a binding starting with 'true'" $ do
+        let text = "truest = \"hello\"\nvalue = truest"
+        result <- parseScript (Filename "test.glue") text
+        result
+          `shouldBe` Right
+            [ Statement $ AssignValue (BindingName "truest") (StringLiteral "hello"),
+              Statement $
+                AssignValue
+                  (BindingName "value")
+                  (BindingExpression $ BindingName "truest")
+            ]
+
+      it "should not be able to assign a binding starting with 'true' that is not defined" $ do
+        let text = "value = truest"
+        result <- parseScript (Filename "test.glue") text
+        isLeft result `shouldBe` True
 
     describe "String interpolation" $ do
       it "should be able to interpolate a string without any binding fragments" $ do
@@ -220,7 +288,7 @@ spec = do
 
     describe "if statements" $ do
       it "should be able to parse a basic if statement with a boolean literal" $ do
-        let text = "if true { value = \"test\" } else {}"
+        let text = "if True { value = \"test\" } else {}"
         result <- parseScript (Filename "test.glue") text
         expectRight result
         result
