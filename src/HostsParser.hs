@@ -20,21 +20,33 @@ data HostEntry = HostEntry
 data IPAddress = IPAddress !Int !Int !Int !Int
   deriving (Eq, Show)
 
+-- | This is the function we use in order to actually read a file and parse it.
+parseHostsFile :: FilePath -> IO (Either (Megaparsec.ParseErrorBundle Text Void) [HostEntry])
+parseHostsFile path = do
+  contents <- readFileUtf8 path
+  pure $ parseHostsText (Filename path) contents
+
 -- | This is the function that actually makes sure we run the parser on content. Everything that
 -- follows from the invocation of `hostsFileP` is going to be executing in our `Parser` context.
-parseHostsFile :: Filename -> Text -> Either (Megaparsec.ParseErrorBundle Text Void) [HostEntry]
-parseHostsFile (Filename filename) =
+parseHostsText :: Filename -> Text -> Either (Megaparsec.ParseErrorBundle Text Void) [HostEntry]
+parseHostsText (Filename filename) =
   -- The reason we use `runParser` here instead of `runParserT` is because we have the `Identity`
   -- monad as our baked in monad. This way we will automatically unwrap the value since it doesn't
   -- depend on any interesting `m` type.
-  Megaparsec.runParser hostsFileP filename
+  --
+  -- Note how we consume all initial whitespace in the file before we start parsing. This turns out
+  -- to be a fairly common occurrence, as it's common for configuration files and other types of
+  -- files to start with comments in the language/format that they're written in.
+  Megaparsec.runParser (spaceConsumer *> lexeme hostsFileP) filename
 
+-- | This is a parser for what we can consider the entire file, so it's in effect a parser that
+-- should, in a higher-level manner, describe the entire file.
 hostsFileP :: Parser [HostEntry]
 hostsFileP =
-  -- `sepBy1` takes two parsers, one for each thing we want to parse and one for what separates them.
-  -- In this case we know that we want to parse several `HostEntry`s and that they are separated by
-  -- newlines.
-  Megaparsec.sepBy1 hostEntryP MChar.newline
+  -- Each entry is parsed with `lexeme hostentryP`, which means that we'll consume all whitespace
+  -- after the entry. This means we can just say "We want to read many host entries and whitespace
+  -- after", as each entry will follow the whitespace that is also consumed.
+  many $ lexeme hostEntryP
 
 hostEntryP :: Parser HostEntry
 hostEntryP = do
@@ -66,9 +78,7 @@ ipAddressP = do
   a <- Lexer.decimal <* MChar.char '.'
   b <- Lexer.decimal <* MChar.char '.'
   c <- Lexer.decimal <* MChar.char '.'
-  d <- Lexer.decimal
-
-  pure $ IPAddress a b c d
+  IPAddress a b c <$> Lexer.decimal
 
 hostNameP :: Parser Text
 hostNameP = do
@@ -89,3 +99,21 @@ hostNameCharacterP =
       MChar.char '-',
       MChar.char '.'
     ]
+
+-- | Defines how whitespace is consumed.
+spaceConsumer :: Parser ()
+spaceConsumer =
+  Lexer.space
+    skipSpaces
+    (Lexer.skipLineComment "#")
+    Megaparsec.empty
+  where
+    skipSpaces = MChar.space1 <|> Megaparsec.skipSome (MChar.char '\xfeff')
+
+-- | Applies a parser and any amount of whitespace after.
+lexeme :: Parser a -> Parser a
+lexeme = Lexer.lexeme spaceConsumer
+
+-- | Reads a specific string of text and any amount of whitespace after.
+symbol :: Text -> Parser Text
+symbol = Lexer.symbol spaceConsumer
